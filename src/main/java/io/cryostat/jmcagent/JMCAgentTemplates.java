@@ -65,11 +65,7 @@ public class JMCAgentTemplates {
     @Path("/{probeTemplateName}")
     @Produces(MediaType.APPLICATION_XML)
     @Operation(
-            summary = "Get a specific probe template",
-            description =
-                    """
-                    Get the probe template XML definition for the given template name. 
-                    """)
+            summary = "Get a specific probe template")
     public String getProbeTemplate(@RestPath String probeTemplateName)
             throws IOException, SAXException {
         return service.getTemplateContent(probeTemplateName);
