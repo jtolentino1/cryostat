@@ -68,9 +68,7 @@ public class JMCAgentTemplates {
             summary = "Get a specific probe template",
             description =
                     """
-                    Get the probe template XML definition for the given template name. This is the same type of
-                    probe configuration file used by the JMC Agent. See
-                    https://github.com/openjdk/jmc/blob/master/agent/README.md for more information.
+                    Get the probe template XML definition for the given template name. 
                     """)
     public String getProbeTemplate(@RestPath String probeTemplateName)
             throws IOException, SAXException {
