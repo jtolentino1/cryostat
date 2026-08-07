@@ -27,6 +27,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -874,8 +875,26 @@ public class Discovery {
                             "TLS for agent connections is required by (%s)",
                             ConfigProperties.AGENT_TLS_REQUIRED));
         }
+        validateCallbackAddress(callbackUri, remoteAddress);
 
         return new CallbackValidation(callbackUri, unauthCallback, remoteAddress);
+    }
+
+    private void validateCallbackAddress(URI callbackUri, InetAddress remoteAddress) {
+        try {
+            if (Arrays.stream(InetAddress.getAllByName(callbackUri.getHost()))
+                    .noneMatch(remoteAddress::equals)) {
+                throw new BadRequestException(
+                        String.format(
+                                "callback host \"%s\" does not resolve to remote address \"%s\"",
+                                callbackUri.getHost(), remoteAddress.getHostAddress()));
+            }
+        } catch (UnknownHostException e) {
+            throw new BadRequestException(
+                    String.format(
+                            "callback host \"%s\" could not be resolved", callbackUri.getHost()),
+                    e);
+        }
     }
 
     private DiscoveryPlugin findOrCreatePlugin(

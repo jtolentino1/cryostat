@@ -63,6 +63,39 @@ public class DiscoveryPluginTest extends AbstractTransactionalTestBase {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"/api/v4/discovery", "/api/v4.3/discovery/agents"})
+    void rejectsCallbackThatDoesNotResolveToClientAddress(String endpoint) {
+        String callback = String.format("http://127.0.0.2:%d/health/liveness", baseUrl.getPort());
+        given().when().get(callback).then().assertThat().statusCode(204);
+
+        var payload = new HashMap<>();
+        payload.put("realm", "test");
+        payload.put("callback", callback);
+        payload.put(
+                "credential",
+                Map.of(
+                        "matchExpression", "true",
+                        "username", "user",
+                        "password", "pass"));
+        payload.put("nodes", List.of());
+        payload.put("fillStrategy", "NONE");
+        payload.put("context", Map.of());
+
+        given().log()
+                .all()
+                .when()
+                .body(payload)
+                .contentType(ContentType.JSON)
+                .post(endpoint)
+                .then()
+                .log()
+                .all()
+                .and()
+                .assertThat()
+                .statusCode(400);
+    }
+
+    @ParameterizedTest
     @NullAndEmptySource
     void rejectsInvalidRealmName(String realm) {
         var payload = new HashMap<>();

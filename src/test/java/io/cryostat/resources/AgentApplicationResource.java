@@ -35,6 +35,7 @@ public class AgentApplicationResource
 
     private static final String DEFAULT_IMAGE =
             "quay.io/redhat-java-monitoring/quarkus-cryostat-agent:latest";
+    private static final String HOST_GATEWAY_ALIAS = "host.docker.internal";
     public static final int PORT = 9977;
     public static final String ALIAS = "quarkus-cryostat-agent";
 
@@ -93,12 +94,13 @@ public class AgentApplicationResource
                 Optional.ofNullable(System.getenv("QUARKUS_TEST_IMAGE"))
                         .filter(StringUtils::isNotBlank)
                         .orElse(DEFAULT_IMAGE);
+        String callbackHost = resolveHostGateway(img, network);
         this.container =
                 new GenericContainer<>(DockerImageName.parse(img))
                         .withExposedPorts(PORT)
                         .withEnv(getEnvMap())
                         .withNetworkAliases(ALIAS)
-                        .withExtraHost("host.docker.internal", "host-gateway")
+                        .withExtraHost(HOST_GATEWAY_ALIAS, "host-gateway")
                         .waitingFor(new HostPortWaitStrategy().forPorts(PORT))
                         .withStartupAttempts(3)
                         .withCreateContainerCmdModifier(
@@ -111,9 +113,10 @@ public class AgentApplicationResource
         container.setPortBindings(List.of(String.format("%d:%d", hostAgentPort, PORT)));
         container.addEnv(
                 "CRYOSTAT_AGENT_BASEURI",
-                String.format("http://host.docker.internal:%d/", cryostatPort));
+                String.format("http://%s:%d/", HOST_GATEWAY_ALIAS, cryostatPort));
         container.addEnv(
-                "CRYOSTAT_AGENT_CALLBACK", String.format("http://localhost:%d/", hostAgentPort));
+                "CRYOSTAT_AGENT_CALLBACK",
+                String.format("http://%s:%d/", toUriHost(callbackHost), hostAgentPort));
 
         container.start();
 
@@ -137,6 +140,35 @@ public class AgentApplicationResource
     @Override
     public void setIntegrationTestContext(DevServicesContext context) {
         containerNetworkId = context.containerNetworkId();
+    }
+
+    private static String resolveHostGateway(String img, Optional<Network> network) {
+        try (GenericContainer<?> resolver =
+                new GenericContainer<>(DockerImageName.parse(img))
+                        .withExtraHost(HOST_GATEWAY_ALIAS, "host-gateway")
+                        .withCreateContainerCmdModifier(
+                                cmd -> cmd.withEntrypoint("/bin/sh").withCmd("-c", "sleep 30"))) {
+            network.ifPresent(resolver::withNetwork);
+            resolver.start();
+
+            var result = resolver.execInContainer("getent", "hosts", HOST_GATEWAY_ALIAS);
+            if (result.getExitCode() != 0 || StringUtils.isBlank(result.getStdout())) {
+                throw new IllegalStateException(
+                        String.format(
+                                "Failed to resolve %s: %s",
+                                HOST_GATEWAY_ALIAS, result.getStderr().strip()));
+            }
+            return result.getStdout().strip().split("\\s+")[0];
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to resolve the container host gateway", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted while resolving the container host gateway", e);
+        }
+    }
+
+    private static String toUriHost(String host) {
+        return host.contains(":") ? String.format("[%s]", host) : host;
     }
 
     private static int findFreePort() {
